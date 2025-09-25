@@ -1,0 +1,709 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Hillbrow Facade Generator</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.4.0/p5.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;700&display=swap" rel="stylesheet">
+    <style>
+        /* All styles are now scoped to the container to prevent them from affecting the rest of the page. */
+        #facade-generator-container {
+            font-family: 'Inter', sans-serif;
+            background-color: #1a202c;
+            color: #e2e8f0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            padding: 1rem;
+        }
+
+        #facade-generator-container canvas {
+            border: 2px solid #4a5568;
+            border-radius: 0.5rem;
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+            background-color: #2d3748;
+        }
+
+        #facade-generator-container button {
+            margin-top: 1.5rem;
+            background-color: #fff;
+            color: #1a202c;
+            padding: 0.75rem 2rem;
+            border-radius: 9999px;
+            font-weight: bold;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+            transition: transform 0.2s;
+            cursor: pointer;
+            border: 2px solid #1a202c;
+        }
+        
+        #facade-generator-container button:hover {
+            transform: scale(1.05);
+        }
+
+        #facade-generator-container .slider-group {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            margin-top: 1.5rem;
+        }
+        
+        /* Modal-specific styles are also scoped */
+        #facade-generator-container #helpModal .absolute {
+            background-color: #1a202c;
+        }
+    </style>
+</head>
+<body class="bg-gray-900 text-gray-100 min-h-screen flex flex-col items-center justify-center p-8">
+    <div id="facade-generator-container" class="bg-gray-900 text-gray-100 min-h-screen flex flex-col items-center justify-center p-8">
+        <h1 class="text-3xl font-bold mb-4">Hillbrow Facade Generator</h1>
+        <p class="text-gray-400 mb-8">Click the button to generate a unique building facade based on a procedural shape grammar.</p>
+        
+        <div id="canvas-container"></div>
+        
+        <div class="slider-group">
+            <label for="floorsSlider" class="text-gray-400 mb-2">Number of Floors: <span id="floorValue">8</span></label>
+            <input type="range" id="floorsSlider" min="4" max="8" value="8" class="w-64">
+        </div>
+
+        <div class="flex space-x-4">
+            <button id="generateButton" class="bg-gray-500 hover:bg-gray-600 text-white font-bold py-2 px-6 rounded-full shadow-lg transition duration-300 transform hover:scale-105 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-opacity-50">Generate Facade</button>
+            <button id="exportButton" class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-6 rounded-full shadow-lg transition duration-300 transform hover:scale-105 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-opacity-50">Export PNG</button>
+            <button id="helpButton" class="bg-gray-500 hover:bg-gray-600 text-white font-bold py-2 px-6 rounded-full shadow-lg transition duration-300 transform hover:scale-105 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-opacity-50">?</button>
+        </div>
+
+        <div id="description-container" class="mt-8 p-4 bg-gray-800 rounded-lg shadow-lg w-full max-w-2xl hidden"></div>
+        <div id="helpModal" class="fixed inset-0 z-50 flex items-center justify-center hidden">
+            <div class="absolute inset-0 bg-gray-900 opacity-75"></div>
+            <div class="bg-gray-700 rounded-lg p-8 z-50 max-w-3xl overflow-y-auto max-h-screen">
+                <h3 class="text-2xl font-bold mb-4">Hillbrow Facade Generator Rules</h3>
+                <p class="text-gray-400">This is a visual summary of the rules that procedurally generate the building facade.</p>
+                <div id="help-content" class="mt-6">
+                    <!-- Diagram content goes here -->
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
+                        <div>
+                            <h4 class="font-bold text-xl mb-2">Facade Structure</h4>
+                            <ul class="list-disc list-inside space-y-2 text-gray-300">
+                                <li><b class="text-lg">Overall Dimensions:</b> The building is always 15 units wide.</li>
+                                <li><b class="text-lg">Ground Floor:</b> Always 4 units high.</li>
+                                <li><b class="text-lg">Upper Floors:</b> Always 3 units high.</li>
+                                <li><b class="text-lg">Number of Floors:</b> Adjustable from 4 to 8 via a slider.</li>
+                            </ul>
+                        </div>
+                        <div>
+                            <h4 class="font-bold text-xl mb-2">Ground Floor Logic</h4>
+                            <ul class="list-disc list-inside space-y-2 text-gray-300">
+                                <li><b class="text-lg">Wall Material:</b> A single color is chosen from a palette of white, grey, or light brown.</li>
+                                <li><b class="text-lg">Separation:</b> A solid slab separates it from the floors above.</li>
+                                <li><b class="text-lg">Front Door:</b> Positioned randomly on the left, right, or center. The frame provides a strong contrast to the wall.</li>
+                                <li><b class="text-lg">Windows:</b> The presence of windows is random. If present, they are placed only on panels without the door.</li>
+                            </ul>
+                        </div>
+                    </div>
+
+                    <div class="mt-8">
+                        <h4 class="font-bold text-xl mb-2">Upper Floors Logic</h4>
+                        <p class="text-gray-300 mb-4">A single floor pattern is generated and repeated on all floors above the ground floor.</p>
+                        <ul class="list-disc list-inside space-y-2 text-gray-300">
+                            <li><b class="text-lg">Module Types:</b> Each 3-unit-wide panel is a blank wall, a balcony, or a window panel.</li>
+                            <li><b class="text-lg">Adjacent Panels:</b>
+                                <ul class="list-disc list-inside ml-4">
+                                    <li>Blank walls cannot be next to each other.</li>
+                                    <li>Balconies cannot be next to each other.</li>
+                                    <li>The left and right edge panels cannot both be blank walls.</li>
+                                </ul>
+                            </li>
+                            <li><b class="text-lg">Special Rules:</b>
+                                <ul class="list-disc list-inside ml-4">
+                                    <li>The panel above the door has a 30% chance of being a window, a 30% chance of being a concrete panel, a 30% chance of being a balcony, and a 10% chance of being a plain wall.</li>
+                                    <li>At least one balcony is guaranteed in the pattern.</li>
+                                    <li>If the door is centered, the pattern is guaranteed to be asymmetrical.</li>
+                                </ul>
+                            </li>
+                        </ul>
+                    </div>
+                    
+                    <div class="mt-8">
+                        <h4 class="font-bold text-xl mb-2">Roof Logic</h4>
+                        <p class="text-gray-300 mb-4">The roof is a distinct, single-story element at the top.</p>
+                        <ul class="list-disc list-inside space-y-2 text-gray-300">
+                            <li><b class="text-lg">Balustrade:</b> A 1-unit-high balustrade is always present. It can be brick, concrete, or a white material with lines.</li>
+                            <li><b class="text-lg">Penthouse Block:</b> There is a 50% chance a 1, 2, or 3-module-wide penthouse block will be placed on the roof. It matches the building's materials and has small windows.</li>
+                            <li>
+                            	<b class="text-lg">Handrail:</b> A 0.1-unit white line is always drawn on top of the balustrade to act as a handrail.
+                            </li>
+                        </ul>
+                    </div>
+                    <div class="mt-8">
+                        <p class="text-gray-400">Coded with Gemini 2.5 by Peter le Roux 2025</p>
+                    </div>
+                </div>
+                <button id="closeModal" class="mt-8 bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-6 rounded-full shadow-lg transition duration-300 transform hover:scale-105 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-opacity-50">Close</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const facadeWidthUnits = 15;
+        const panelWidthUnits = 3;
+        const unitSize = 25; 
+
+        const groundFloorHeightUnits = 4;
+        const upperFloorHeightUnits = 3;
+
+        const canvasWidth = facadeWidthUnits * unitSize;
+
+        const concretePalette = ['#A0AEC0', '#EDF2F7'];
+        const brickPalette = ['#C05621', '#8B4513'];
+        const groundPalette = ['#EDF2F7', '#A0AEC0', '#4A5568', '#718096', '#E2E2D0', '#D2B48C'];
+        
+        const concreteColorNames = { '#A0AEC0': 'pale grey', '#EDF2F7': 'off-white' };
+        const brickColorNames = { '#C05621': 'terracotta', '#8B4513': 'dark brown' };
+
+        let numFloors;
+        let canvasHeight;
+        let groundFloorHasWindows;
+        let facadeBrickColor;
+        let facadeConcreteColor;
+        let currentPattern = [];
+        let groundDoorPosition = 'center';
+        let balustradeType;
+        let balustradeColor;
+        let roofHasBlock;
+        let roofBlockWidthUnits;
+        let roofBlockX;
+        let groundWallColor;
+        let currentDescription = '';
+        
+        let floorsSlider;
+        let floorValueSpan;
+        let generateButton;
+        let exportButton;
+        let helpButton;
+        let closeModal;
+        let descriptionContainer;
+        let helpModal;
+        
+        function generateBuilding(p) {
+            numFloors = parseInt(floorsSlider.value);
+            canvasHeight = groundFloorHeightUnits * unitSize + numFloors * upperFloorHeightUnits * unitSize;
+            p.resizeCanvas(canvasWidth, canvasHeight);
+            
+            groundFloorHasWindows = p.random(1) < 0.5;
+            groundWallColor = p.random(groundPalette);
+            groundDoorPosition = p.random(['left', 'center', 'right']);
+            
+            facadeBrickColor = p.random(brickPalette);
+            facadeConcreteColor = p.random(concretePalette);
+            
+            const balustradeTypes = ['concrete', 'brick', 'white'];
+            balustradeType = p.random(balustradeTypes);
+            
+            if (balustradeType === 'brick') {
+                balustradeColor = p.color(facadeBrickColor);
+            } else if (balustradeType === 'concrete') {
+                balustradeColor = p.color(facadeConcreteColor);
+            } else {
+                balustradeColor = p.color(255);
+            }
+
+            currentPattern = generateFloorPattern(p);
+            roofHasBlock = p.random(1) < 0.5;
+            if (roofHasBlock) {
+                roofBlockWidthUnits = p.random([1, 2, 3]);
+                roofBlockX = p.random(0, canvasWidth - (roofBlockWidthUnits * panelWidthUnits * unitSize));
+            }
+        }
+
+        function drawBrownWall(p, x, y, w, h) {
+            p.fill(facadeBrickColor);
+            p.noStroke();
+            p.rect(x, y, w, h);
+        }
+
+        function drawConcreteWall(p, x, y, w, h) {
+            p.fill(facadeConcreteColor);
+            p.noStroke();
+            p.rect(x, y, w, h);
+            p.stroke(0);
+            p.strokeWeight(1);
+            const hatchSpacing = 1 * unitSize;
+            for (let i = 0; i < w; i += hatchSpacing) {
+                p.line(x + i, y, x + i, y + h);
+            }
+            for (let i = 0; i < h; i += hatchSpacing) {
+                p.line(x, y + i, x + w, y + i);
+            }
+        }
+
+        function drawBalconyWithWindow(p, x, y, w, h, floorIndex, panelIndex) {
+            const fasciaHeight = 0.5 * unitSize;
+            const windowHeight = 1.5 * unitSize;
+            const balustradeHeight = 1 * unitSize;
+            
+            const adjacentColor = getAdjacentPanelColor(p, floorIndex, panelIndex);
+
+            if (balustradeType === 'brick') {
+                p.fill(p.color(concretePalette[1]));
+            } else {
+                p.fill(adjacentColor);
+            }
+            p.noStroke();
+            p.rect(x, y, w, fasciaHeight);
+
+            const windowY = y + fasciaHeight;
+            p.fill('#4A5568');
+            p.noStroke();
+            p.rect(x, windowY, w, windowHeight);
+            
+            p.fill(p.color('#39424e'));
+            p.noStroke();
+            p.rect(x, windowY, w, windowHeight * 0.25);
+            p.rect(x, windowY, w * 0.1, windowHeight);
+
+            const balustradeY = y + fasciaHeight + windowHeight;
+            p.fill(balustradeColor);
+            p.noStroke();
+            p.rect(x, balustradeY, w, balustradeHeight);
+
+            if (balustradeType === 'white') {
+                p.stroke(0);
+                p.strokeWeight(1);
+                const lineSpacing = 0.1 * unitSize;
+                for (let lineY = balustradeY + lineSpacing; lineY < balustradeY + balustradeHeight; lineY += lineSpacing) {
+                    p.line(x, lineY, x + w, lineY);
+                }
+            }
+        }
+
+        function getAdjacentPanelColor(p, floorIndex, panelIndex) {
+            if (panelIndex > 0) {
+                const adjacentPanel = currentPattern[panelIndex - 1];
+                if (adjacentPanel.type === 'brown' || adjacentPanel.type === 'window') {
+                    return p.color(facadeBrickColor);
+                } else if (adjacentPanel.type === 'concrete') {
+                    return p.color(facadeConcreteColor);
+                }
+            }
+            return p.color(facadeBrickColor);
+        }
+        
+        function getPanelColor(p, type) {
+            if (type === 'brown' || type === 'window') {
+                return p.color(facadeBrickColor);
+            } else if (type === 'concrete') {
+                return p.color(facadeConcreteColor);
+            } else if (type === 'balcony') {
+                return balustradeColor;
+            } else if (type === 'ground') {
+                 return p.color(groundWallColor);
+            }
+            return p.color(0);
+        }
+        
+        function drawBoxWindow(p, x, y, w, h, parentType) {
+            let parentColor;
+            if (parentType === 'brown' || parentType === 'window') {
+                parentColor = p.color(facadeBrickColor);
+            } else if (parentType === 'concrete') {
+                parentColor = p.color(facadeConcreteColor);
+            } else if (parentType === 'ground') {
+                parentColor = p.color(groundWallColor);
+            } else if (parentType === 'penthouse') {
+                 const blockMaterial = p.random(['brick', 'plaster']);
+                 if (blockMaterial === 'brick') {
+                     parentColor = p.color(facadeBrickColor);
+                 } else {
+                     parentColor = p.color(facadeConcreteColor);
+                 }
+            }
+            
+            p.fill(parentColor);
+            p.noStroke();
+            p.rect(x, y, w, h);
+            
+            const windowSize = 0.6 * unitSize;
+            
+            const windowX = x + (w - windowSize) / 2;
+            const windowY = y + (h / 3) - (windowSize / 2);
+
+            const shadowOffset = 0.1 * unitSize; 
+            const shadowColor = p.color(150);
+            
+            p.noStroke();
+            p.fill(shadowColor);
+            p.rect(windowX + windowSize + shadowOffset, windowY + shadowOffset, shadowOffset, windowSize);
+            p.rect(windowX + shadowOffset, windowY + windowSize + shadowOffset, windowSize + shadowOffset, shadowOffset);
+            
+            p.noStroke();
+            p.fill(0);
+            p.rect(windowX, windowY, windowSize, windowSize);
+            
+            p.stroke(255);
+            p.strokeWeight(4);
+            p.noFill();
+            p.rect(windowX, windowY, windowSize, windowSize);
+        }
+
+        function drawGroundFloor(p, x, y, w, h) {
+            p.fill(groundWallColor);
+            p.noStroke();
+            p.rect(x, y + h * 0.1, w, h * 0.9);
+
+            const doorWidth = p.random([w / 10, w / 7, w / 4]);
+            
+            let doorX;
+
+            if (groundDoorPosition === 'left') {
+                doorX = x + w * 0.1;
+            } else if (groundDoorPosition === 'right') {
+                doorX = x + w - doorWidth - w * 0.1;
+            } else {
+                doorX = x + (w - doorWidth) / 2;
+            }
+            
+            p.noStroke();
+            p.fill(0);
+            p.rect(doorX, y + h * 0.1, doorWidth, h * 0.9);
+
+            const isLightWall = p.red(p.color(groundWallColor)) > 150 || p.green(p.color(groundWallColor)) > 150 || p.blue(p.color(groundWallColor)) > 150;
+            const frameColor = isLightWall ? p.color(0) : p.color(255);
+            
+            p.strokeWeight(4);
+            p.stroke(frameColor);
+            p.noFill();
+            p.rect(doorX, y + h * 0.1, doorWidth, h * 0.9);
+
+            if (groundFloorHasWindows) {
+                const windowSize = 0.6 * unitSize;
+                const windowY = y + h * 0.45;
+                
+                const panelWidth = panelWidthUnits * unitSize;
+                const numPanels = facadeWidthUnits / panelWidthUnits;
+
+                for (let i = 0; i < numPanels; i++) {
+                    const panelX = i * panelWidth;
+                    const panelCenter = panelX + panelWidth / 2;
+                    if (panelCenter < doorX || panelCenter > doorX + doorWidth) {
+                        const windowX = panelX + (panelWidth - windowSize) / 2;
+                        drawBoxWindow(p, windowX, windowY, windowSize, windowSize, 'ground');
+                    }
+                }
+            }
+            
+            p.noStroke();
+            p.fill(p.random(['#CBD5E0', '#A0AEC0']));
+            p.rect(x, y, w, h * 0.1);
+        }
+        
+        function generateFloorPattern(p) {
+            let pattern = [];
+            const numPanels = facadeWidthUnits / panelWidthUnits;
+            
+            facadeBrickColor = p.random(brickPalette);
+            facadeConcreteColor = p.random(concretePalette);
+            
+            const balustradeTypes = ['concrete', 'brick', 'white'];
+            balustradeType = p.random(balustradeTypes);
+            
+            if (balustradeType === 'brick') {
+                balustradeColor = p.color(facadeBrickColor);
+            } else if (balustradeType === 'concrete') {
+                balustradeColor = p.color(facadeConcreteColor);
+            } else {
+                balustradeColor = p.color(255);
+            }
+
+            do {
+                pattern = [];
+                let hasBalcony = false;
+                let lastType = '';
+                
+                for (let j = 0; j < numPanels; j++) {
+                    let newType;
+                    let isAdjacentProblem;
+
+                    do {
+                        const choices = ['window', 'brown', 'concrete', 'balcony'];
+                        newType = p.random(choices);
+                        isAdjacentProblem = false;
+
+                        if (newType === 'balcony' && lastType === 'balcony') {
+                            isAdjacentProblem = true;
+                        }
+
+                        const isBlank = (type) => type === 'brown' || type === 'concrete';
+                        if (isBlank(newType) && isBlank(lastType)) {
+                            isAdjacentProblem = true;
+                        }
+                    } while (isAdjacentProblem);
+
+                    if (newType === 'balcony') {
+                        hasBalcony = true;
+                    }
+
+                    pattern.push({ type: newType });
+                    lastType = newType;
+                }
+                
+                if (!hasBalcony) {
+                    continue;
+                }
+                
+                if (pattern[0].type === 'brown' && pattern[pattern.length - 1].type === 'brown') {
+                    continue;
+                }
+
+            } while (groundDoorPosition === 'center' && isSymmetrical(pattern));
+            
+            const doorPanelIndex = Math.floor(groundDoorPosition === 'left' ? 0.1 * numPanels : groundDoorPosition === 'right' ? 0.9 * numPanels : numPanels / 2);
+            const r = p.random(1);
+            if (r < 0.3) {
+                pattern[doorPanelIndex].type = 'window';
+            } else if (r < 0.6) {
+                pattern[doorPanelIndex].type = 'concrete';
+            } else if (r < 0.9) {
+                pattern[doorPanelIndex].type = 'balcony';
+            } else {
+                pattern[doorPanelIndex].type = 'brown';
+            }
+            
+            return pattern;
+        }
+
+        function isSymmetrical(pattern) {
+            const numPanels = pattern.length;
+            for (let i = 0; i < Math.floor(numPanels / 2); i++) {
+                const type1 = pattern[i].type;
+                const type2 = pattern[numPanels - 1 - i].type;
+                if (type1 !== type2) {
+                    return false;
+                }
+            }
+            return true;
+        }
+        
+        function drawRoof(p, y, w) {
+            const balustradeHeight = 1 * unitSize;
+            let finalBalustradeColor;
+            if (balustradeType === 'brick') {
+                finalBalustradeColor = p.color(facadeBrickColor);
+            } else if (balustradeType === 'concrete') {
+                finalBalustradeColor = p.color(facadeConcreteColor);
+            } else {
+                finalBalustradeColor = p.color(255);
+            }
+            p.fill(finalBalustradeColor);
+            p.noStroke();
+            p.rect(0, y - balustradeHeight, w, balustradeHeight);
+
+            const handrailWeight = 0.1 * unitSize;
+            p.stroke(255);
+            p.strokeWeight(handrailWeight);
+            p.line(0, y - balustradeHeight, w, y - balustradeHeight);
+
+            if (balustradeType === 'white') {
+                p.stroke(0);
+                p.strokeWeight(1);
+                const lineSpacing = 0.1 * unitSize;
+                for (let lineY = y - balustradeHeight + lineSpacing; lineY < y; lineY += lineSpacing) {
+                    p.line(0, lineY, w, lineY);
+                }
+            }
+
+            if (roofHasBlock) {
+                const blockHeight = upperFloorHeightUnits * unitSize;
+                const blockWidth = roofBlockWidthUnits * panelWidthUnits * unitSize;
+                const blockX = roofBlockX;
+                
+                const blockMaterial = p.random(['brick', 'plaster']);
+                if (blockMaterial === 'brick') {
+                    drawBrownWall(p, blockX, y - balustradeHeight - blockHeight, blockWidth, blockHeight);
+                } else {
+                    drawConcreteWall(p, blockX, y - balustradeHeight - blockHeight, blockWidth, blockHeight);
+                }
+                
+                const windowSize = 0.6 * unitSize;
+                const windowSpacing = blockWidth / (roofBlockWidthUnits * 2);
+                for (let i = 0; i < roofBlockWidthUnits * 2 - 1; i++) {
+                    const windowX = blockX + windowSpacing + i * windowSpacing;
+                    const windowY = y - balustradeHeight - blockHeight + (blockHeight / 2) - (windowSize / 2);
+                    drawBoxWindow(p, windowX - windowSize / 2, windowY, windowSize, windowSize, 'penthouse');
+                }
+            }
+        }
+        
+        function getPatternDescription(pattern) {
+            let desc = '';
+            for (let i = 0; i < pattern.length; i++) {
+                switch (pattern[i].type) {
+                    case 'window':
+                        desc += 'a brown wall with a window, ';
+                        break;
+                    case 'brown':
+                        desc += 'a blank brown wall, ';
+                        break;
+                    case 'concrete':
+                        desc += 'a blank concrete wall with hatch lines, ';
+                        break;
+                    case 'balcony':
+                        desc += 'a balcony with a window, ';
+                        break;
+                }
+            }
+            return desc.slice(0, -2);
+        }
+        
+        function getBrickColorName(hex) {
+            return brickColorNames[hex];
+        }
+        
+        function getConcreteColorName(hex) {
+            return concreteColorNames[hex];
+        }
+
+        function generateDescription(p) {
+            let description = '';
+            
+            description += `<h3><b>Building Description</b></h3>\n\n`;
+            description += `This building has ${numFloors} floors, with a unique facade pattern that repeats from floor to floor.<br><br>`;
+            
+            description += `<h3><b>Ground Floor</b></h3>\n\n`;
+            description += `The ground floor features a prominent front door located on the <b>${groundDoorPosition}</b> side. `;
+            if (groundFloorHasWindows) {
+                description += `It is flanked by small, square windows.<br><br>`;
+            } else {
+                description += `The wall is a solid, unadorned surface.<br><br>`;
+            }
+            
+            description += `<h3><b>Upper Floors</b></h3>\n\n`;
+            description += `The primary materials for the upper floors are <b>${getBrickColorName(facadeBrickColor)}</b> brick and <b>${getConcreteColorName(facadeConcreteColor)}</b> concrete. `;
+            description += `The repeating pattern for each floor consists of: ${getPatternDescription(currentPattern)}. `;
+            description += `This pattern is <b>${isSymmetrical(currentPattern) ? 'symmetrical' : 'asymmetrical'}</b>.<br><br>`;
+            
+            description += `<h3><b>Roof</b></h3>\n\n`;
+            description += `The roof is topped with a simple, 1-unit-high <b>${balustradeType} balustrade</b>. `;
+            if (roofHasBlock) {
+                description += `Additionally, a <b>${roofBlockWidthUnits}-module-wide penthouse block</b> with a ${p.random(['brick', 'plaster'])} exterior sits on top of the balustrade.<br>`;
+            } else {
+                description += `The building has a simple flat roof.<br>`;
+            }
+            description += `<br><p>Coded with Gemini 2.5 by Peter le Roux 2025</p>`;
+            
+            return description;
+        }
+        
+        function generateAndDraw(p) {
+            if (p) {
+                generateBuilding(p);
+                p.redraw();
+                const descriptionContainer = document.getElementById('description-container');
+                if (descriptionContainer) {
+                    const currentDescription = generateDescription(p);
+                    descriptionContainer.innerHTML = currentDescription;
+                    descriptionContainer.style.display = 'block';
+                }
+            }
+        }
+
+        let p5_instance;
+
+        function sketch(p) {
+            p.setup = () => {
+                p.createCanvas(canvasWidth, canvasHeight).parent('canvas-container');
+                p.noLoop();
+                p.rectMode(p.CORNER);
+                
+                floorsSlider = document.getElementById('floorsSlider');
+                floorValueSpan = document.getElementById('floorValue');
+                generateButton = document.getElementById('generateButton');
+                exportButton = document.getElementById('exportButton');
+                helpButton = document.getElementById('helpButton');
+                closeModal = document.getElementById('closeModal');
+                descriptionContainer = document.getElementById('description-container');
+                helpModal = document.getElementById('helpModal');
+
+                generateButton.addEventListener('click', () => generateAndDraw(p));
+                floorsSlider.addEventListener('input', () => {
+                    if (floorValueSpan) {
+                        floorValueSpan.textContent = floorsSlider.value;
+                    }
+                    generateAndDraw(p);
+                });
+                exportButton.addEventListener('click', () => {
+                    p.canvas.toBlob(blob => {
+                        const url = URL.createObjectURL(blob);
+                        const a = document.createElement('a');
+                        a.href = url;
+                        a.download = 'hillbrow-facade.png';
+                        document.body.appendChild(a);
+                        a.click();
+                        document.body.removeChild(a);
+                        URL.revokeObjectURL(url);
+                    });
+                });
+                helpButton.addEventListener('click', () => helpModal.style.display = 'flex');
+                closeModal.addEventListener('click', () => helpModal.style.display = 'none');
+
+                generateBuilding(p);
+                p.redraw();
+            };
+
+            p.draw = () => {
+                p.background('#1a202c');
+                const groundFloorHeightPx = groundFloorHeightUnits * unitSize;
+                const upperFloorHeightPx = upperFloorHeightUnits * unitSize;
+                let currentY = p.height - upperFloorHeightPx - groundFloorHeightPx;
+
+                for (let i = 1; i < numFloors; i++) {
+                    for (let j = 0; j < currentPattern.length; j++) {
+                        const x = j * panelWidthUnits * unitSize;
+                        const y = currentY;
+                        const w = panelWidthUnits * unitSize;
+                        const h = upperFloorHeightUnits * unitSize;
+                        const module = currentPattern[j];
+                        if (module.type === 'window') {
+                            drawBoxWindow(p, x, y, w, h, 'brown');
+                        } else if (module.type === 'brown') {
+                            drawBrownWall(p, x, y, w, h);
+                        } else if (module.type === 'concrete') {
+                            drawConcreteWall(p, x, y, w, h);
+                        } else if (module.type === 'balcony') {
+                            drawBalconyWithWindow(p, x, y, w, h, i, j);
+                        }
+                    }
+                    currentY -= upperFloorHeightUnits * unitSize;
+                }
+                
+                drawRoof(p, currentY + upperFloorHeightPx, p.width);
+                drawGroundFloor(p, 0, p.height - groundFloorHeightPx, p.width, groundFloorHeightPx);
+                
+                p.stroke(0);
+                p.strokeWeight(1);
+                let borderY = p.height - groundFloorHeightUnits * unitSize;
+                for (let i = 1; i < numFloors; i++) {
+                    for (let j = 0; j < currentPattern.length - 1; j++) {
+                        const panelType1 = currentPattern[j].type;
+                        const panelType2 = currentPattern[j+1].type;
+                        const color1 = getPanelColor(p, panelType1);
+                        const color2 = getPanelColor(p, panelType2);
+                        if (color1.toString() !== color2.toString()) {
+                            p.line((j+1) * panelWidthUnits * unitSize, borderY - upperFloorHeightUnits * unitSize, (j+1) * panelWidthUnits * unitSize, borderY);
+                        }
+                    }
+                    borderY -= upperFloorHeightUnits * unitSize;
+                }
+                p.line(0, p.height - groundFloorHeightPx, p.width, p.height - groundFloorHeightPx);
+            };
+        }
+
+        window.onload = () => {
+            p5_instance = new p5(sketch);
+        };
+    </script>
+</body>
+</html>
