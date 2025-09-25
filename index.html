@@ -83,6 +83,7 @@
                 <h3 class="text-2xl font-bold mb-4">Hillbrow Facade Generator Rules</h3>
                 <p class="text-gray-400">This is a visual summary of the rules that procedurally generate the building facade.</p>
                 <div id="help-content" class="mt-6">
+                    <!-- Diagram content goes here -->
                     <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
                         <div>
                             <h4 class="font-bold text-xl mb-2">Facade Structure</h4>
@@ -118,7 +119,7 @@
                             </li>
                             <li><b class="text-lg">Special Rules:</b>
                                 <ul class="list-disc list-inside ml-4">
-                                    <li>The panel above the door has a 30% chance of being a window, a 30% chance of being a concrete panel, a 30% chance of being a balcony, and a 10% chance of being a plain wall. **(Now correctly implemented!)**</li>
+                                    <li>The panel above the door has a 30% chance of being a window, a 30% chance of being a concrete panel, a 30% chance of being a balcony, and a 10% chance of being a plain wall.</li>
                                     <li>At least one balcony is guaranteed in the pattern.</li>
                                     <li>If the door is centered, the pattern is guaranteed to be asymmetrical.</li>
                                 </ul>
@@ -133,7 +134,7 @@
                             <li><b class="text-lg">Balustrade:</b> A 1-unit-high balustrade is always present. It can be brick, concrete, or a white material with lines.</li>
                             <li><b class="text-lg">Penthouse Block:</b> There is a 50% chance a 1, 2, or 3-module-wide penthouse block will be placed on the roof. It matches the building's materials and has small windows.</li>
                             <li>
-                                <b class="text-lg">Handrail:</b> A 0.1-unit white line is always drawn on top of the balustrade to act as a handrail.
+                            	<b class="text-lg">Handrail:</b> A 0.1-unit white line is always drawn on top of the balustrade to act as a handrail.
                             </li>
                         </ul>
                     </div>
@@ -189,10 +190,8 @@
         
         function generateBuilding(p) {
             numFloors = parseInt(floorsSlider.value);
-            canvasHeight = (numFloors * upperFloorHeightUnits + groundFloorHeightUnits) * unitSize;
+            canvasHeight = groundFloorHeightUnits * unitSize + numFloors * upperFloorHeightUnits * unitSize;
             p.resizeCanvas(canvasWidth, canvasHeight);
-            
-            p.randomSeed(p.millis()); // Ensure a new random seed for fresh generation
             
             groundFloorHasWindows = p.random(1) < 0.5;
             groundWallColor = p.random(groundPalette);
@@ -216,9 +215,7 @@
             roofHasBlock = p.random(1) < 0.5;
             if (roofHasBlock) {
                 roofBlockWidthUnits = p.random([1, 2, 3]);
-                const blockWidth = roofBlockWidthUnits * panelWidthUnits * unitSize;
-                // Randomly position the block but ensure it fits within the facade
-                roofBlockX = p.random(0, canvasWidth - blockWidth);
+                roofBlockX = p.random(0, canvasWidth - (roofBlockWidthUnits * panelWidthUnits * unitSize));
             }
         }
 
@@ -248,8 +245,7 @@
             const windowHeight = 1.5 * unitSize;
             const balustradeHeight = 1 * unitSize;
             
-            // The background color of the fascia should match the adjacent wall material for a cleaner look
-            const adjacentColor = getPanelColor(p, currentPattern[panelIndex].type); 
+            const adjacentColor = getAdjacentPanelColor(p, floorIndex, panelIndex);
 
             if (balustradeType === 'brick') {
                 p.fill(p.color(concretePalette[1]));
@@ -284,6 +280,18 @@
             }
         }
 
+        function getAdjacentPanelColor(p, floorIndex, panelIndex) {
+            if (panelIndex > 0) {
+                const adjacentPanel = currentPattern[panelIndex - 1];
+                if (adjacentPanel.type === 'brown' || adjacentPanel.type === 'window') {
+                    return p.color(facadeBrickColor);
+                } else if (adjacentPanel.type === 'concrete') {
+                    return p.color(facadeConcreteColor);
+                }
+            }
+            return p.color(facadeBrickColor);
+        }
+        
         function getPanelColor(p, type) {
             if (type === 'brown' || type === 'window') {
                 return p.color(facadeBrickColor);
@@ -306,7 +314,6 @@
             } else if (parentType === 'ground') {
                 parentColor = p.color(groundWallColor);
             } else if (parentType === 'penthouse') {
-                 // For penthouse, determine material dynamically for the drawing
                  const blockMaterial = p.random(['brick', 'plaster']);
                  if (blockMaterial === 'brick') {
                      parentColor = p.color(facadeBrickColor);
@@ -380,14 +387,11 @@
 
                 for (let i = 0; i < numPanels; i++) {
                     const panelX = i * panelWidth;
-                    // Check if the panel center is outside the door area
-                    if (panelX + panelWidth > doorX + doorWidth * 0.1 && panelX < doorX + doorWidth * 0.9) {
-                        continue; // Skip the panel where the door is located
+                    const panelCenter = panelX + panelWidth / 2;
+                    if (panelCenter < doorX || panelCenter > doorX + doorWidth) {
+                        const windowX = panelX + (panelWidth - windowSize) / 2;
+                        drawBoxWindow(p, windowX, windowY, windowSize, windowSize, 'ground');
                     }
-                    
-                    // Simple window placement in all other panels
-                    const windowX = panelX + (panelWidth - windowSize) / 2;
-                    drawBoxWindow(p, windowX, windowY, windowSize, windowSize, 'ground');
                 }
             }
             
@@ -414,16 +418,6 @@
                 balustradeColor = p.color(255);
             }
 
-            // Determine the module index above the door (0, 2, or 4 for a 15-unit facade with 3-unit modules)
-            let finalDoorPanelIndex;
-            if (groundDoorPosition === 'left') {
-                finalDoorPanelIndex = 0; 
-            } else if (groundDoorPosition === 'right') {
-                finalDoorPanelIndex = numPanels - 1; 
-            } else { // Center
-                finalDoorPanelIndex = Math.floor(numPanels / 2); 
-            }
-
             do {
                 pattern = [];
                 let hasBalcony = false;
@@ -431,38 +425,22 @@
                 
                 for (let j = 0; j < numPanels; j++) {
                     let newType;
-                    
-                    if (j === finalDoorPanelIndex) {
-                        // Special Rule for the panel above the door (30/30/30/10 split)
-                        const r = p.random(1);
-                        if (r < 0.3) {
-                            newType = 'window';
-                        } else if (r < 0.6) {
-                            newType = 'concrete';
-                        } else if (r < 0.9) {
-                            newType = 'balcony';
-                        } else {
-                            newType = 'brown';
+                    let isAdjacentProblem;
+
+                    do {
+                        const choices = ['window', 'brown', 'concrete', 'balcony'];
+                        newType = p.random(choices);
+                        isAdjacentProblem = false;
+
+                        if (newType === 'balcony' && lastType === 'balcony') {
+                            isAdjacentProblem = true;
                         }
-                    } else {
-                        // Normal random generation with adjacency checks
-                        let isAdjacentProblem;
 
-                        do {
-                            const choices = ['window', 'brown', 'concrete', 'balcony'];
-                            newType = p.random(choices);
-                            isAdjacentProblem = false;
-
-                            if (newType === 'balcony' && lastType === 'balcony') {
-                                isAdjacentProblem = true;
-                            }
-
-                            const isBlank = (type) => type === 'brown' || type === 'concrete';
-                            if (isBlank(newType) && isBlank(lastType)) {
-                                isAdjacentProblem = true;
-                            }
-                        } while (isAdjacentProblem);
-                    }
+                        const isBlank = (type) => type === 'brown' || type === 'concrete';
+                        if (isBlank(newType) && isBlank(lastType)) {
+                            isAdjacentProblem = true;
+                        }
+                    } while (isAdjacentProblem);
 
                     if (newType === 'balcony') {
                         hasBalcony = true;
@@ -472,11 +450,27 @@
                     lastType = newType;
                 }
                 
-                // End-Edge Check: left and right edge panels cannot both be blank walls.
-                const isBlank = (type) => type === 'brown' || type === 'concrete';
-                const edgeCheckFails = isBlank(pattern[0].type) && isBlank(pattern[pattern.length - 1].type);
+                if (!hasBalcony) {
+                    continue;
+                }
+                
+                if (pattern[0].type === 'brown' && pattern[pattern.length - 1].type === 'brown') {
+                    continue;
+                }
 
-            } while (!hasBalcony || edgeCheckFails || (groundDoorPosition === 'center' && isSymmetrical(pattern)));
+            } while (groundDoorPosition === 'center' && isSymmetrical(pattern));
+            
+            const doorPanelIndex = Math.floor(groundDoorPosition === 'left' ? 0.1 * numPanels : groundDoorPosition === 'right' ? 0.9 * numPanels : numPanels / 2);
+            const r = p.random(1);
+            if (r < 0.3) {
+                pattern[doorPanelIndex].type = 'window';
+            } else if (r < 0.6) {
+                pattern[doorPanelIndex].type = 'concrete';
+            } else if (r < 0.9) {
+                pattern[doorPanelIndex].type = 'balcony';
+            } else {
+                pattern[doorPanelIndex].type = 'brown';
+            }
             
             return pattern;
         }
@@ -534,16 +528,11 @@
                 }
                 
                 const windowSize = 0.6 * unitSize;
-                // Distribute windows evenly across the block
-                const numWindows = Math.max(1, roofBlockWidthUnits * 2); 
-                const totalSpace = blockWidth;
-                const windowSpacing = totalSpace / numWindows;
-                const offset = (windowSpacing - windowSize) / 2;
-
-                for (let i = 0; i < numWindows; i++) {
-                    const windowX = blockX + i * windowSpacing + offset;
+                const windowSpacing = blockWidth / (roofBlockWidthUnits * 2);
+                for (let i = 0; i < roofBlockWidthUnits * 2 - 1; i++) {
+                    const windowX = blockX + windowSpacing + i * windowSpacing;
                     const windowY = y - balustradeHeight - blockHeight + (blockHeight / 2) - (windowSize / 2);
-                    drawBoxWindow(p, windowX, windowY, windowSize, windowSize, 'penthouse');
+                    drawBoxWindow(p, windowX - windowSize / 2, windowY, windowSize, windowSize, 'penthouse');
                 }
             }
         }
@@ -625,9 +614,7 @@
 
         function sketch(p) {
             p.setup = () => {
-                // Initialize canvas with max possible height, will be resized on first generate
-                const initialMaxHeight = (8 * upperFloorHeightUnits + groundFloorHeightUnits) * unitSize;
-                p.createCanvas(canvasWidth, initialMaxHeight).parent('canvas-container');
+                p.createCanvas(canvasWidth, canvasHeight).parent('canvas-container');
                 p.noLoop();
                 p.rectMode(p.CORNER);
                 
@@ -648,7 +635,6 @@
                     generateAndDraw(p);
                 });
                 exportButton.addEventListener('click', () => {
-                    // Export the canvas as a PNG
                     p.canvas.toBlob(blob => {
                         const url = URL.createObjectURL(blob);
                         const a = document.createElement('a');
@@ -663,18 +649,16 @@
                 helpButton.addEventListener('click', () => helpModal.style.display = 'flex');
                 closeModal.addEventListener('click', () => helpModal.style.display = 'none');
 
-                generateAndDraw(p);
+                generateBuilding(p);
+                p.redraw();
             };
 
             p.draw = () => {
                 p.background('#1a202c');
                 const groundFloorHeightPx = groundFloorHeightUnits * unitSize;
                 const upperFloorHeightPx = upperFloorHeightUnits * unitSize;
-                
-                // Start drawing just above the ground floor, which is at the bottom of the canvas
-                let currentY = p.height - groundFloorHeightPx - upperFloorHeightPx; 
+                let currentY = p.height - upperFloorHeightPx - groundFloorHeightPx;
 
-                // Draw Upper Floors (starting from the first floor up to the roof)
                 for (let i = 1; i < numFloors; i++) {
                     for (let j = 0; j < currentPattern.length; j++) {
                         const x = j * panelWidthUnits * unitSize;
@@ -682,13 +666,10 @@
                         const w = panelWidthUnits * unitSize;
                         const h = upperFloorHeightUnits * unitSize;
                         const module = currentPattern[j];
-
-                        // Draw the module based on its type
-                        if (module.type === 'window' || module.type === 'brown') {
+                        if (module.type === 'window') {
+                            drawBoxWindow(p, x, y, w, h, 'brown');
+                        } else if (module.type === 'brown') {
                             drawBrownWall(p, x, y, w, h);
-                            if (module.type === 'window') {
-                                drawBoxWindow(p, x, y, w, h, 'brown');
-                            }
                         } else if (module.type === 'concrete') {
                             drawConcreteWall(p, x, y, w, h);
                         } else if (module.type === 'balcony') {
@@ -698,17 +679,31 @@
                     currentY -= upperFloorHeightUnits * unitSize;
                 }
                 
-                // The currentY is now the position of the floor slab just below the roof
                 drawRoof(p, currentY + upperFloorHeightPx, p.width);
-
-                // Draw Ground Floor
                 drawGroundFloor(p, 0, p.height - groundFloorHeightPx, p.width, groundFloorHeightPx);
                 
-                // Draw separator lines where material changes
                 p.stroke(0);
                 p.strokeWeight(1);
                 let borderY = p.height - groundFloorHeightUnits * unitSize;
                 for (let i = 1; i < numFloors; i++) {
                     for (let j = 0; j < currentPattern.length - 1; j++) {
                         const panelType1 = currentPattern[j].type;
-                        const panel
+                        const panelType2 = currentPattern[j+1].type;
+                        const color1 = getPanelColor(p, panelType1);
+                        const color2 = getPanelColor(p, panelType2);
+                        if (color1.toString() !== color2.toString()) {
+                            p.line((j+1) * panelWidthUnits * unitSize, borderY - upperFloorHeightUnits * unitSize, (j+1) * panelWidthUnits * unitSize, borderY);
+                        }
+                    }
+                    borderY -= upperFloorHeightUnits * unitSize;
+                }
+                p.line(0, p.height - groundFloorHeightPx, p.width, p.height - groundFloorHeightPx);
+            };
+        }
+
+        window.onload = () => {
+            p5_instance = new p5(sketch);
+        };
+    </script>
+</body>
+</html>
