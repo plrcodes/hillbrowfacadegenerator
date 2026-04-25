@@ -533,23 +533,7 @@
             function drawRoof(y, w) {
                 const balustradeH = BALUSTRADE_HEIGHT_RATIO * UNIT_SIZE;
                 
-                p.fill(state.materials.balustradeColor);
-                p.noStroke();
-                p.rect(0, y - balustradeH, w, balustradeH);
-
-                p.stroke(255);
-                p.strokeWeight(0.1 * UNIT_SIZE);
-                p.line(0, y - balustradeH, w, y - balustradeH);
-
-                if (state.materials.balustradeType === 'white') {
-                    p.stroke(0);
-                    p.strokeWeight(1);
-                    const lineSpacing = 0.1 * UNIT_SIZE;
-                    for (let lineY = y - balustradeH + lineSpacing; lineY < y; lineY += lineSpacing) {
-                        p.line(0, lineY, w, lineY);
-                    }
-                }
-
+                // Draw penthouse FIRST so it gets clipped by the balustrade
                 if (state.roof.hasBlock) {
                     const blockH = UPPER_FLOOR_HEIGHT_UNITS * UNIT_SIZE;
                     const blockW = state.roof.blockWidthModules * PANEL_WIDTH_UNITS * UNIT_SIZE;
@@ -568,6 +552,24 @@
                         const winX = bX + i * windowSpacing + offset;
                         const winY = y - balustradeH - blockH + (blockH / 2) - (windowSize / 2);
                         drawBoxWindow(winX, winY, windowSize, windowSize, 'penthouse');
+                    }
+                }
+
+                // Draw balustrade SECOND so it overlays the bottom strokes of the penthouse
+                p.fill(state.materials.balustradeColor);
+                p.noStroke();
+                p.rect(0, y - balustradeH, w, balustradeH);
+
+                p.stroke(255);
+                p.strokeWeight(0.1 * UNIT_SIZE);
+                p.line(0, y - balustradeH, w, y - balustradeH);
+
+                if (state.materials.balustradeType === 'white') {
+                    p.stroke(0);
+                    p.strokeWeight(1);
+                    const lineSpacing = 0.1 * UNIT_SIZE;
+                    for (let lineY = y - balustradeH + lineSpacing; lineY < y; lineY += lineSpacing) {
+                        p.line(0, lineY, w, lineY);
                     }
                 }
             }
